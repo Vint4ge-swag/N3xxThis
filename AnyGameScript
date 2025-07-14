@@ -1,0 +1,1584 @@
+-- Основные сервисы
+local players = game:GetService("Players")
+local lighting = game:GetService("Lighting")
+local teleport = game:GetService("TeleportService")
+local http = game:GetService("HttpService")
+local tween = game:GetService("TweenService")
+local runService = game:GetService("RunService")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local userInputService = game:GetService("UserInputService")
+local teams = game:GetService("Teams")
+local localPlayer = players.LocalPlayer
+
+-- Создаем глобальные объекты для синхронизации
+local N3xxData = Instance.new("Folder")
+N3xxData.Name = "N3xxData"
+N3xxData.Parent = replicatedStorage
+
+local function createSharedValue(name, defaultValue)
+    local value = Instance.new("StringValue")
+    value.Name = name
+    value.Value = defaultValue
+    value.Parent = N3xxData
+    return value
+end
+
+-- Глобальные переменные для состояний
+local discoValue = createSharedValue("DiscoMode", "false")
+local musicIdValue = createSharedValue("MusicId", "1843302063")
+local musicEnabledValue = createSharedValue("MusicEnabled", "false")
+local fogValue = createSharedValue("FogMode", "false")
+local skyValue = createSharedValue("Skybox", "136245921878961")
+
+-- Функции эффектов
+local function discoMode(state)
+    discoValue.Value = tostring(state)
+    if state then
+        coroutine.wrap(function()
+            local lastUpdate = tick()
+            while discoValue.Value == "true" do
+                if tick() - lastUpdate > 0.1 then
+                    lighting.Ambient = Color3.new(math.random(), math.random(), math.random())
+                    lighting.OutdoorAmbient = Color3.new(math.random(), math.random(), math.random())
+                    lastUpdate = tick()
+                end
+                task.wait()
+            end
+        end)()
+    else
+        lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+        lighting.OutdoorAmbient = Color3.new(0.5, 0.5, 0.5)
+    end
+end
+
+-- Функция воспроизведения музыки
+local function playMusic(musicId, enabled)
+    musicIdValue.Value = tostring(musicId)
+    musicEnabledValue.Value = tostring(enabled)
+    
+    -- Удаляем старую музыку
+    for _, sound in ipairs(workspace:GetDescendants()) do
+        if sound:IsA("Sound") and sound.Name == "N3xxMusic" then
+            sound:Stop()
+            sound:Destroy()
+        end
+    end
+    
+    if enabled and musicId ~= "" then
+        local speaker = Instance.new("Part")
+        speaker.Name = "N3xxMusicSpeaker"
+        speaker.Anchored = true
+        speaker.Size = Vector3.new(1, 1, 1)
+        speaker.Transparency = 1
+        speaker.CanCollide = false
+        speaker.Position = Vector3.new(0, 10, 0)
+        speaker.Parent = workspace
+        
+        local sound = Instance.new("Sound")
+        sound.Name = "N3xxMusic"
+        sound.SoundId = "rbxassetid://" .. musicId
+        sound.Looped = true
+        sound.Volume = 5
+        sound.Parent = speaker
+        sound:Play()
+    end
+end
+
+-- Функция лечения
+local function healMe()
+    local character = localPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.Health = humanoid.MaxHealth
+            serverMessage("HEALED!")
+        end
+    end
+end
+
+-- Создание базовой платформы
+local function createBaseplate()
+    local oldBase = workspace:FindFirstChild("N3xxBaseplate")
+    if oldBase then oldBase:Destroy() end
+    
+    local baseplate = Instance.new("Part")
+    baseplate.Size = Vector3.new(2048, 20, 2048)
+    baseplate.Position = Vector3.new(0, 0, 0)
+    baseplate.Anchored = true
+    baseplate.Name = "N3xxBaseplate"
+    baseplate.BrickColor = BrickColor.new("Forest green")
+    baseplate.Material = Enum.Material.Neon
+    baseplate.Parent = workspace
+    serverMessage("Baseplate created!")
+end
+
+-- Изменение имен игроков
+local function nameAll()
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr.Character then
+            local head = plr.Character:FindFirstChild("Head")
+            if head then
+                for _, v in ipairs(head:GetChildren()) do
+                    if v:IsA("BillboardGui") and v.Name == "N3xxName" then
+                        v:Destroy()
+                    end
+                end
+                
+                local billboard = Instance.new("BillboardGui")
+                billboard.Name = "N3xxName"
+                billboard.Adornee = head
+                billboard.Size = UDim2.new(0, 100, 0, 40)
+                billboard.StudsOffset = Vector3.new(0, 3, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = head
+                
+                local label = Instance.new("TextLabel")
+                label.Text = "N3xx the goat"
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.TextColor3 = Color3.new(1, 0, 0)
+                label.Font = Enum.Font.GothamBold
+                label.TextSize = 18
+                label.Parent = billboard
+            end
+        end
+    end
+    serverMessage("All players renamed!")
+end
+
+-- Установка скайбокса
+local function setSkybox(imageId)
+    skyValue.Value = imageId
+    for _, obj in pairs(lighting:GetChildren()) do
+        if obj:IsA("Sky") then
+            obj:Destroy()
+        end
+    end
+
+    local sky = Instance.new("Sky")
+    sky.SkyboxBk = "rbxassetid://" .. imageId
+    sky.SkyboxDn = "rbxassetid://" .. imageId
+    sky.SkyboxFt = "rbxassetid://" .. imageId
+    sky.SkyboxLf = "rbxassetid://" .. imageId
+    sky.SkyboxRt = "rbxassetid://" .. imageId
+    sky.SkyboxUp = "rbxassetid://" .. imageId
+    sky.Parent = lighting
+    serverMessage("Skybox changed!")
+end
+
+-- Спам декалями
+local function decalSpam()
+    local decalId = "3100736018"
+    
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if (part:IsA("BasePart") or part:IsA("MeshPart")) and part.Name ~= "N3xxBaseplate" then
+            for _, child in ipairs(part:GetChildren()) do
+                if child:IsA("Decal") then
+                    child:Destroy()
+                end
+            end
+            
+            local faces = {
+                Enum.NormalId.Front,
+                Enum.NormalId.Back,
+                Enum.NormalId.Left,
+                Enum.NormalId.Right,
+                Enum.NormalId.Top,
+                Enum.NormalId.Bottom
+            }
+            
+            for _, face in ipairs(faces) do
+                pcall(function()
+                    local decal = Instance.new("Decal")
+                    decal.Texture = "rbxassetid://" .. decalId
+                    decal.Face = face
+                    decal.Parent = part
+                end)
+            end
+        end
+    end
+    serverMessage("Decal spam applied!")
+end
+
+-- Подбрасывание игроков
+local function flingAll()
+    local admin = localPlayer
+    local adminChar = admin.Character
+    if not adminChar then return end
+    
+    local adminRoot = adminChar:FindFirstChild("HumanoidRootPart")
+    if not adminRoot then return end
+    
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr ~= admin and plr.Character then
+            local targetChar = plr.Character
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
+            
+            if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
+                adminRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
+                
+                local startTime = tick()
+                local spinDuration = 1
+                local spinSpeed = 10000
+                
+                while tick() - startTime < spinDuration do
+                    local angle = (tick() - startTime) * spinSpeed * 2 * math.pi
+                    local offset = Vector3.new(math.sin(angle)*5, 0, math.cos(angle)*5)
+                    adminRoot.CFrame = CFrame.new(targetRoot.Position + offset, targetRoot.Position)
+                    task.wait()
+                end
+                
+                for _, v in ipairs(targetRoot:GetChildren()) do
+                    if v:IsA("BodyVelocity") then
+                        v:Destroy()
+                    end
+                end
+                
+                local bv = Instance.new("BodyVelocity")
+                bv.Velocity = Vector3.new(
+                    math.random(-2000, 2000), 
+                    math.random(500, 1000), 
+                    math.random(-2000, 2000)
+                )
+                bv.MaxForce = Vector3.new(100000, 100000, 100000)
+                bv.P = 100000
+                bv.Parent = targetRoot
+                game:GetService("Debris"):AddItem(bv, 5)
+                
+                task.wait(0.5)
+            end
+        end
+    end
+    serverMessage("Flinged all players!")
+end
+
+-- Танцующие курицы
+local function chickenDance()
+    local danceId = "5917459365"
+    
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr.Character then
+            local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                    if track.Name == "N3xxChickenDance" then
+                        track:Stop()
+                    end
+                end
+                
+                local anim = Instance.new("Animation")
+                anim.AnimationId = "rbxassetid://" .. danceId
+                
+                local track = humanoid:LoadAnimation(anim)
+                track.Name = "N3xxChickenDance"
+                track.Looped = true
+                track:Play()
+            end
+        end
+    end
+    serverMessage("Chicken dance activated!")
+end
+
+-- Радужный туман
+local function rainbowFog(state)
+    fogValue.Value = tostring(state)
+    if state then
+        coroutine.wrap(function()
+            local lastUpdate = tick()
+            while fogValue.Value == "true" do
+                if tick() - lastUpdate > 0.5 then
+                    lighting.FogColor = Color3.new(math.random(), math.random(), math.random())
+                    lighting.FogEnd = 1000
+                    lighting.FogStart = 0
+                    lastUpdate = tick()
+                end
+                task.wait()
+            end
+        end)()
+    else
+        lighting.FogColor = Color3.new(1, 1, 1)
+    end
+end
+
+-- Серверные сообщения
+local function serverMessage(text)
+    for _, plr in ipairs(players:GetPlayers()) do
+        local gui = plr:WaitForChild("PlayerGui")
+        
+        local oldMsg = gui:FindFirstChild("N3xxMessage")
+        if oldMsg then oldMsg:Destroy() end
+        
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "N3xxMessage"
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.Parent = gui
+        
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0.15, 0)
+        frame.Position = UDim2.new(0, 0, 0.4, 0)
+        frame.BackgroundColor3 = Color3.new(0, 0, 0)
+        frame.BackgroundTransparency = 0.7
+        frame.BorderSizePixel = 0
+        frame.Parent = screenGui
+        
+        local label = Instance.new("TextLabel")
+        label.Text = text
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.TextColor3 = Color3.new(1, 0, 0)
+        label.Font = Enum.Font.GothamBlack
+        label.TextSize = 28
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.new(0, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Parent = frame
+        
+        tween:Create(frame, TweenInfo.new(1, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0, 0, 0.3, 0)
+        }):Play()
+        
+        task.delay(6, function()
+            tween:Create(frame, TweenInfo.new(1), {
+                Position = UDim2.new(0, 0, 0.2, 0),
+                BackgroundTransparency = 1
+            }):Play()
+            tween:Create(label, TweenInfo.new(1), {
+                TextTransparency = 1,
+                TextStrokeTransparency = 1
+            }):Play()
+            task.delay(1, function() screenGui:Destroy() end)
+        end)
+    end
+end
+
+-- Прыжковый испуг
+local function jumpscareAll()
+    local imageId = "3100736018"
+    local soundId = "6428910559"
+    
+    for _, plr in ipairs(players:GetPlayers()) do
+        local gui = plr:WaitForChild("PlayerGui")
+        
+        local oldScare = gui:FindFirstChild("N3xxJumpscare")
+        if oldScare then oldScare:Destroy() end
+        
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "N3xxJumpscare"
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.Parent = gui
+        
+        local image = Instance.new("ImageLabel")
+        image.Size = UDim2.new(1, 0, 1, 0)
+        image.Position = UDim2.new(0, 0, 0, 0)
+        image.Image = "rbxassetid://" .. imageId
+        image.BackgroundColor3 = Color3.new(0, 0, 0)
+        image.ScaleType = Enum.ScaleType.Crop
+        image.ZIndex = 10
+        image.Parent = screenGui
+        
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://" .. soundId
+        sound.Volume = 2
+        sound.Parent = screenGui
+        sound:Play()
+        
+        image.ImageTransparency = 1
+        tween:Create(image, TweenInfo.new(0.2), {
+            ImageTransparency = 0
+        }):Play()
+        
+        task.delay(1.5, function()
+            tween:Create(image, TweenInfo.new(0.5), {
+                ImageTransparency = 1
+            }):Play()
+            task.delay(0.5, function()
+                screenGui:Destroy()
+            end)
+        end)
+    end
+    
+    serverMessage("JUMPSCARE INCOMING!")
+end
+
+-- Телепорт к игроку
+local function teleportToPlayer(playerName)
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr.Name == playerName and plr.Character then
+            local targetRoot = plr.Character:FindFirstChild("HumanoidRootPart")
+            local localChar = localPlayer.Character
+            if targetRoot and localChar then
+                local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+                if localRoot then
+                    localRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
+                    serverMessage("Teleported to " .. playerName)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Телепортировать игрока к себе
+local function teleportPlayerToMe(playerName)
+    local me = localPlayer
+    local myChar = me.Character
+    if not myChar then return false end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr.Name == playerName and plr ~= me then
+            local char = plr.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.CFrame = myRoot.CFrame * CFrame.new(0, 0, 3)
+                    serverMessage("Teleported " .. plr.Name .. " to you!")
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Телепортировать всех игроков к себе
+local function teleportAllPlayersToMe()
+    local me = localPlayer
+    local myChar = me.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr ~= me then
+            local char = plr.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.CFrame = myRoot.CFrame * CFrame.new(
+                        math.random(-5, 5),
+                        0,
+                        math.random(-5, 5)
+                    )
+                end
+            end
+        end
+    end
+    serverMessage("Teleported all players to you!")
+end
+
+-- Кикнуть всех игроков с сервера (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+local function kickAllPlayers()
+    for _, player in ipairs(players:GetPlayers()) do
+        if player ~= localPlayer then
+            -- Создаем удаленное событие для кика
+            local kickEvent = Instance.new("RemoteEvent")
+            kickEvent.Name = "N3xxKickEvent"
+            kickEvent.Parent = player:FindFirstChild("PlayerScripts") or player:WaitForChild("PlayerGui")
+            
+            -- Создаем скрипт для кика
+            local kickScript = Instance.new("LocalScript")
+            kickScript.Name = "N3xxKickScript"
+            kickScript.Source = [[
+                local event = script.Parent:WaitForChild("N3xxKickEvent")
+                event.OnClientEvent:Connect(function()
+                    game:GetService("NetworkClient"):SetOutgoingKBPSLimit(1)
+                    wait(0.5)
+                    game.Players.LocalPlayer:Kick("Kicked by N3xx Admin")
+                end)
+            ]]
+            kickScript.Parent = kickEvent
+            
+            -- Активируем кик
+            kickEvent:FireClient(player)
+        end
+    end
+    serverMessage("KICKED ALL PLAYERS!")
+end
+
+-- Режим полета
+local flying = false
+local flySpeed = 50
+local flyKeys = {W=false, A=false, S=false, D=false}
+local flyConnections = {}
+local flyBodyGyro, flyBodyVelocity
+
+local function toggleFly(state)
+    flying = state
+    local character = localPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+    
+    for _, conn in ipairs(flyConnections) do
+        conn:Disconnect()
+    end
+    flyConnections = {}
+    
+    if state then
+        humanoid.PlatformStand = true
+        
+        flyBodyGyro = Instance.new("BodyGyro")
+        flyBodyGyro.P = 10000
+        flyBodyGyro.MaxTorque = Vector3.new(0, 0, 0)
+        flyBodyGyro.CFrame = rootPart.CFrame
+        flyBodyGyro.Parent = rootPart
+        
+        flyBodyVelocity = Instance.new("BodyVelocity")
+        flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        flyBodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+        flyBodyVelocity.P = 10000
+        flyBodyVelocity.Parent = rootPart
+        
+        table.insert(flyConnections, userInputService.InputBegan:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.W then flyKeys.W = true
+            elseif input.KeyCode == Enum.KeyCode.A then flyKeys.A = true
+            elseif input.KeyCode == Enum.KeyCode.S then flyKeys.S = true
+            elseif input.KeyCode == Enum.KeyCode.D then flyKeys.D = true
+            end
+        end))
+        
+        table.insert(flyConnections, userInputService.InputEnded:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.W then flyKeys.W = false
+            elseif input.KeyCode == Enum.KeyCode.A then flyKeys.A = false
+            elseif input.KeyCode == Enum.KeyCode.S then flyKeys.S = false
+            elseif input.KeyCode == Enum.KeyCode.D then flyKeys.D = false
+            end
+        end))
+        
+        table.insert(flyConnections, runService.Heartbeat:Connect(function()
+            if not flying then return end
+            
+            local camera = workspace.CurrentCamera
+            if not camera then return end
+            
+            local direction = Vector3.new()
+            if flyKeys.W then direction = direction + camera.CFrame.LookVector end
+            if flyKeys.S then direction = direction - camera.CFrame.LookVector end
+            if flyKeys.A then direction = direction - camera.CFrame.RightVector end
+            if flyKeys.D then direction = direction + camera.CFrame.RightVector end
+            
+            direction = direction.Unit * flySpeed
+            
+            if direction.Magnitude == 0 then
+                flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            else
+                flyBodyVelocity.Velocity = direction
+            end
+            
+            flyBodyGyro.CFrame = camera.CFrame
+        end))
+    else
+        humanoid.PlatformStand = false
+        if flyBodyGyro then flyBodyGyro:Destroy() end
+        if flyBodyVelocity then flyBodyVelocity:Destroy() end
+    end
+end
+
+-- Fling игрока
+local function activateFling()
+    local character = localPlayer.Character
+    if not character then return end
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    for _, v in ipairs(root:GetChildren()) do
+        if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") then
+            v:Destroy()
+        end
+    end
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+    
+    local ang = Instance.new("BodyAngularVelocity")
+    ang.AngularVelocity = Vector3.new(0, 50000, 0)
+    ang.MaxTorque = Vector3.new(0, math.huge, 0)
+    ang.P = 1000000
+    ang.Parent = root
+    
+    character.Touched:Connect(function(part)
+        local otherChar = part:FindFirstAncestorOfClass("Model")
+        if otherChar then
+            local otherPlayer = players:GetPlayerFromCharacter(otherChar)
+            if otherPlayer and otherPlayer ~= localPlayer then
+                local otherRoot = otherChar:FindFirstChild("HumanoidRootPart")
+                if otherRoot then
+                    local bv = Instance.new("BodyVelocity")
+                    bv.Velocity = (otherRoot.Position - root.Position).Unit * 200 + Vector3.new(0, 50, 0)
+                    bv.MaxForce = Vector3.new(100000, 100000, 100000)
+                    bv.P = 100000
+                    bv.Parent = otherRoot
+                    game:GetService("Debris"):AddItem(bv, 0.5)
+                end
+            end
+        end
+    end)
+end
+
+local function deactivateFling()
+    local character = localPlayer.Character
+    if not character then return end
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    for _, v in ipairs(root:GetChildren()) do
+        if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") then
+            v:Destroy()
+        end
+    end
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = true
+        end
+    end
+end
+
+-- ESP игроков
+local espConnections = {}
+local function toggleESP(state)
+    if state then
+        for _, conn in ipairs(espConnections) do
+            conn:Disconnect()
+        end
+        espConnections = {}
+        
+        local function createESP(player)
+            if player == localPlayer then return end
+            
+            local function addESP(character)
+                local oldESP = character:FindFirstChild("N3xxESP")
+                if oldESP then oldESP:Destroy() end
+                
+                local espFolder = Instance.new("Folder")
+                espFolder.Name = "N3xxESP"
+                espFolder.Parent = character
+                
+                local box = Instance.new("BoxHandleAdornment")
+                box.Name = "ESPBox"
+                box.Adornee = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:WaitForChild("Head")
+                box.AlwaysOnTop = true
+                box.ZIndex = 5
+                box.Size = Vector3.new(3, 5, 1)
+                box.Color3 = Color3.new(1, 0, 0)
+                box.Transparency = 0.5
+                box.Parent = espFolder
+                
+                local billboard = Instance.new("BillboardGui")
+                billboard.Name = "ESPName"
+                billboard.Adornee = box.Adornee
+                billboard.Size = UDim2.new(0, 100, 0, 40)
+                billboard.StudsOffset = Vector3.new(0, 3, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = espFolder
+                
+                local label = Instance.new("TextLabel")
+                label.Text = player.Name
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.TextColor3 = Color3.new(1, 0, 0)
+                label.Font = Enum.Font.GothamBold
+                label.TextSize = 18
+                label.Parent = billboard
+            end
+            
+            if player.Character then
+                addESP(player.Character)
+            end
+            
+            table.insert(espConnections, player.CharacterAdded:Connect(addESP))
+            table.insert(espConnections, player.CharacterRemoving:Connect(function(char)
+                local esp = char:FindFirstChild("N3xxESP")
+                if esp then esp:Destroy() end
+            end))
+        end
+        
+        for _, player in ipairs(players:GetPlayers()) do
+            createESP(player)
+        end
+        
+        table.insert(espConnections, players.PlayerAdded:Connect(createESP))
+    else
+        for _, conn in ipairs(espConnections) do
+            conn:Disconnect()
+        end
+        espConnections = {}
+        
+        for _, player in ipairs(players:GetPlayers()) do
+            if player.Character then
+                local esp = player.Character:FindFirstChild("N3xxESP")
+                if esp then esp:Destroy() end
+            end
+        end
+    end
+end
+
+-- Функция Noclip
+local noclipConnection
+local function toggleNoclip(state)
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    
+    if state then
+        noclipConnection = runService.Stepped:Connect(function()
+            if localPlayer.Character then
+                for _, part in ipairs(localPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Создание команд
+local function createTeams(teamName, teamCount)
+    for _, team in ipairs(teams:GetTeams()) do
+        if team.Name:sub(1, #teamName) == teamName then
+            team:Destroy()
+        end
+    end
+
+    for i = 1, teamCount do
+        local team = Instance.new("Team")
+        team.Name = teamName .. " " .. i
+        team.TeamColor = BrickColor.random()
+        team.Parent = teams
+    end
+
+    serverMessage("Created " .. teamCount .. " teams: " .. teamName)
+end
+
+-- Поджечь всех игроков
+local function fireAll()
+    for _, plr in ipairs(players:GetPlayers()) do
+        if plr ~= localPlayer and plr.Character then
+            local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
+            local rootPart = plr.Character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and rootPart then
+                local fire = Instance.new("Fire")
+                fire.Size = 10
+                fire.Heat = 25
+                fire.Parent = rootPart
+                game:GetService("Debris"):AddItem(fire, 10)
+
+                coroutine.wrap(function()
+                    for i = 1, 10 do
+                        if humanoid and humanoid.Health > 0 then
+                            humanoid:TakeDamage(10)
+                        end
+                        task.wait(0.5)
+                    end
+                end)()
+            end
+        end
+    end
+    serverMessage("Set everyone on fire!")
+end
+
+-- ================ НОВЫЕ ФУНКЦИИ ДЛЯ ВКЛАДКИ TROLLS ================ --
+
+-- Функция переворота всех игроков вверх ногами
+local upsideDownState = false
+local function upsideDownAll()
+    upsideDownState = not upsideDownState
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                if upsideDownState then
+                    humanoid.AutoRotate = false
+                    humanoid.RigType = Enum.HumanoidRigType.R6
+                    humanoid.HipHeight = -1
+                    
+                    local root = player.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        root.CFrame = root.CFrame * CFrame.Angles(0, 0, math.rad(180))
+                    end
+                else
+                    humanoid.AutoRotate = true
+                    humanoid.RigType = Enum.HumanoidRigType.R15
+                    humanoid.HipHeight = 0
+                    
+                    local root = player.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        root.CFrame = root.CFrame * CFrame.Angles(0, 0, 0)
+                    end
+                end
+            end
+        end
+    end
+    serverMessage(upsideDownState and "UPSIDE DOWN MODE ON!" or "UPSIDE DOWN MODE OFF!")
+end
+
+-- Режим больших голов
+local bigHeadModeEnabled = false
+local originalHeadSizes = {}
+
+local function bigHeadMode(state)
+    bigHeadModeEnabled = state
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                if state then
+                    -- Сохраняем оригинальный размер
+                    originalHeadSizes[player.UserId] = head.Size
+                    -- Увеличиваем размер
+                    head.Size = Vector3.new(5, 5, 5)
+                    
+                    -- Увеличиваем Mesh (если есть)
+                    local mesh = head:FindFirstChildOfClass("SpecialMesh")
+                    if mesh then
+                        mesh.Scale = Vector3.new(5, 5, 5)
+                    end
+                else
+                    -- Восстанавливаем оригинальный размер
+                    local originalSize = originalHeadSizes[player.UserId] or Vector3.new(2, 1, 1)
+                    head.Size = originalSize
+                    
+                    local mesh = head:FindFirstChildOfClass("SpecialMesh")
+                    if mesh then
+                        mesh.Scale = Vector3.new(1, 1, 1)
+                    end
+                end
+            end
+        end
+    end
+    serverMessage(state and "BIG HEAD MODE ON!" or "BIG HEAD MODE OFF!")
+end
+
+-- Сделать всех тряпичными куклами
+local function ragdollAll()
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                -- Включаем Ragdoll
+                humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
+                
+                -- Создаем BodyVelocity для эффекта падения
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local bv = Instance.new("BodyVelocity")
+                    bv.Velocity = Vector3.new(0, -50, 0)
+                    bv.MaxForce = Vector3.new(0, math.huge, 0)
+                    bv.P = 10000
+                    bv.Parent = root
+                    game:GetService("Debris"):AddItem(bv, 5)
+                end
+            end
+        end
+    end
+    serverMessage("RAGDOLL EVERYONE!")
+end
+
+-- Анимация плавания в воздухе
+local swimAnimations = {}
+
+local function swimInAir(state)
+    if state then
+        for _, player in ipairs(players:GetPlayers()) do
+            if player.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    -- Останавливаем предыдущие анимации
+                    if swimAnimations[player.UserId] then
+                        swimAnimations[player.UserId]:Stop()
+                        swimAnimations[player.UserId] = nil
+                    end
+                    
+                    -- Загружаем анимацию плавания
+                    local animation = Instance.new("Animation")
+                    animation.AnimationId = "rbxassetid://317779443" -- ID анимации плавания
+                    
+                    local track = humanoid:LoadAnimation(animation)
+                    track.Looped = true
+                    track:Play()
+                    
+                    swimAnimations[player.UserId] = track
+                end
+            end
+        end
+    else
+        -- Останавливаем все анимации плавания
+        for userId, track in pairs(swimAnimations) do
+            if track then
+                track:Stop()
+            end
+        end
+        swimAnimations = {}
+    end
+    serverMessage(state and "SWIM IN AIR ON!" or "SWIM IN AIR OFF!")
+end
+
+-- Конфетти при убийстве
+local confettiEnabled = false
+
+local function confettiExplosion(position)
+    if not confettiEnabled then return end
+    
+    local colors = {
+        Color3.new(1, 0, 0), -- Красный
+        Color3.new(0, 1, 0), -- Зеленый
+        Color3.new(0, 0, 1), -- Синий
+        Color3.new(1, 1, 0), -- Желтый
+        Color3.new(1, 0, 1)  -- Фиолетовый
+    }
+    
+    for i = 1, 50 do
+        local part = Instance.new("Part")
+        part.Size = Vector3.new(0.2, 0.2, 0.2)
+        part.Position = position + Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
+        part.Color = colors[math.random(1, #colors)]
+        part.Material = Enum.Material.Neon
+        part.Anchored = false
+        part.CanCollide = true
+        part.BrickColor = BrickColor.random()
+        
+        local velocity = Vector3.new(
+            math.random(-30, 30),
+            math.random(30, 50),
+            math.random(-30, 30)
+        )
+        
+        local bv = Instance.new("BodyVelocity")
+        bv.Velocity = velocity
+        bv.MaxForce = Vector3.new(1000, 1000, 1000)
+        bv.P = 1000
+        bv.Parent = part
+        
+        part.Parent = workspace
+        game:GetService("Debris"):AddItem(part, 5)
+    end
+end
+
+-- Подключаем обработчик смертей для конфетти
+local function setupConfettiListener()
+    for _, player in ipairs(players:GetPlayers()) do
+        player.CharacterAdded:Connect(function(character)
+            local humanoid = character:WaitForChild("Humanoid")
+            humanoid.Died:Connect(function()
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    confettiExplosion(root.Position)
+                end
+            end)
+        end)
+    end
+    
+    players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function(character)
+            local humanoid = character:WaitForChild("Humanoid")
+            humanoid.Died:Connect(function()
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    confettiExplosion(root.Position)
+                end
+            end)
+        end)
+    end)
+end
+
+-- Дополнительные тролл-функции
+local function spinPlayers()
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local bg = Instance.new("BodyGyro")
+                bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                bg.P = 10000
+                bg.D = 100
+                bg.CFrame = root.CFrame
+                bg.Parent = root
+                
+                coroutine.wrap(function()
+                    for i = 1, 100 do
+                        bg.CFrame = bg.CFrame * CFrame.Angles(0, math.rad(30), 0)
+                        task.wait(0.05)
+                    end
+                    bg:Destroy()
+                end)()
+            end
+        end
+    end
+    serverMessage("SPINNING PLAYERS!")
+end
+
+local function invisiblePlayers()
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            for _, part in ipairs(player.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Transparency = 1
+                end
+            end
+        end
+    end
+    serverMessage("INVISIBLE PLAYERS!")
+end
+
+local function giantPlayers()
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                -- Увеличиваем размер
+                humanoid.BodyDepthScale:SetBaseValue(3)
+                humanoid.BodyHeightScale:SetBaseValue(3)
+                humanoid.BodyWidthScale:SetBaseValue(3)
+                humanoid.HeadScale:SetBaseValue(3)
+            end
+        end
+    end
+    serverMessage("GIANT PLAYERS!")
+end
+
+-- Синхронизация состояний
+local function syncStates()
+    discoMode(discoValue.Value == "true")
+    playMusic(musicIdValue.Value, musicEnabledValue.Value == "true")
+    setSkybox(skyValue.Value)
+    rainbowFog(fogValue.Value == "true")
+end
+
+-- Настройка скорости передвижения
+local walkSpeed = 16
+local jumpPower = 50
+local speedMultiplier = 1
+
+local function setSpeed()
+    if localPlayer.Character then
+        local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = walkSpeed * speedMultiplier
+            humanoid.JumpPower = jumpPower * speedMultiplier
+        end
+    end
+end
+
+localPlayer.CharacterAdded:Connect(function(character)
+    wait(0.5)
+    setSpeed()
+end)
+
+-- Создаем основной GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "N3xxCheatMenu"
+screenGui.Parent = game:GetService("CoreGui") or game:WaitForChild("CoreGui")
+screenGui.ResetOnSpawn = false
+
+local background = Instance.new("ImageLabel")
+background.Name = "Background"
+background.Size = UDim2.new(1, 0, 1, 0)
+background.Position = UDim2.new(0, 0, 0, 0)
+background.Image = "rbxassetid://136245921878961"
+background.ScaleType = Enum.ScaleType.Crop
+background.BackgroundTransparency = 1
+background.ZIndex = 0
+background.Parent = screenGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 500, 0, 600)
+mainFrame.Position = UDim2.new(0.5, -250, 0.5, -300)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+mainFrame.BackgroundTransparency = 0.3
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local glow = Instance.new("ImageLabel")
+glow.Name = "Glow"
+glow.Image = "rbxassetid://3570695787"
+glow.ScaleType = Enum.ScaleType.Slice
+glow.SliceCenter = Rect.new(100, 100, 100, 100)
+glow.Size = UDim2.new(1, 20, 1, 20)
+glow.Position = UDim2.new(0, -10, 0, -10)
+glow.BackgroundTransparency = 1
+glow.ImageColor3 = Color3.fromRGB(0, 255, 0)
+glow.ZIndex = -1
+glow.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Text = "N3xx CHEAT MENU"
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+title.TextColor3 = Color3.fromRGB(0, 255, 0)
+title.Font = Enum.Font.Code
+title.TextSize = 22
+title.BorderSizePixel = 0
+title.Parent = mainFrame
+
+local rain = Instance.new("Frame")
+rain.Name = "DigitalRain"
+rain.Size = UDim2.new(1, 0, 1, 0)
+rain.BackgroundTransparency = 1
+rain.Parent = mainFrame
+
+coroutine.wrap(function()
+    while true do
+        local char = string.char(math.random(65, 90))
+        local label = Instance.new("TextLabel")
+        label.Text = char
+        label.Size = UDim2.new(0, 20, 0, 20)
+        label.Position = UDim2.new(0, math.random(0, 480), 0, -20)
+        label.TextColor3 = Color3.fromRGB(0, 255, 0)
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.Code
+        label.TextSize = 16
+        label.Parent = rain
+        
+        tween:Create(label, TweenInfo.new(math.random(2, 5)), {
+            Position = UDim2.new(0, label.Position.X.Offset, 1, 0)
+        }):Play()
+        
+        game:GetService("Debris"):AddItem(label, 6)
+        task.wait(0.05)
+    end
+end)()
+
+-- Вкладки (добавлена Trolls)
+local tabs = {"Main", "Visuals", "Admin", "Player", "Server", "Trolls"}
+local tabButtons = {}
+local contentFrames = {}
+
+local tabContainer = Instance.new("Frame")
+tabContainer.Name = "TabContainer"
+tabContainer.Size = UDim2.new(1, 0, 0, 40)
+tabContainer.Position = UDim2.new(0, 0, 0, 50)
+tabContainer.BackgroundTransparency = 1
+tabContainer.Parent = mainFrame
+
+local contentContainer = Instance.new("Frame")
+contentContainer.Name = "Content"
+contentContainer.Size = UDim2.new(1, -20, 1, -140)
+contentContainer.Position = UDim2.new(0, 10, 0, 100)
+contentContainer.BackgroundTransparency = 1
+contentContainer.Parent = mainFrame
+
+for i, tabName in ipairs(tabs) do
+    local tabButton = Instance.new("TextButton")
+    tabButton.Name = tabName.."Tab"
+    tabButton.Text = "[" .. tabName .. "]"
+    tabButton.Size = UDim2.new(1/#tabs, -2, 1, 0)
+    tabButton.Position = UDim2.new((i-1)*(1/#tabs), 0, 0, 0)
+    tabButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    tabButton.TextColor3 = i == 1 and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(100, 255, 100)
+    tabButton.Font = Enum.Font.Code
+    tabButton.TextSize = 14
+    tabButton.Parent = tabContainer
+    
+    local contentFrame = Instance.new("ScrollingFrame")
+    contentFrame.Name = tabName.."Content"
+    contentFrame.Size = UDim2.new(1, 0, 1, 0)
+    contentFrame.Position = UDim2.new(0, 0, 0, 0)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Visible = i == 1
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    contentFrame.ScrollBarThickness = 8
+    contentFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 255, 0)
+    contentFrame.Parent = contentContainer
+    
+    table.insert(tabButtons, tabButton)
+    table.insert(contentFrames, contentFrame)
+    
+    tabButton.MouseButton1Click:Connect(function()
+        for _, frame in ipairs(contentFrames) do
+            frame.Visible = false
+        end
+        for _, btn in ipairs(tabButtons) do
+            btn.TextColor3 = Color3.fromRGB(100, 255, 100)
+        end
+        tabButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+        contentFrame.Visible = true
+    end)
+end
+
+-- Функция для добавления элементов
+local function addButton(parent, text, callback)
+    local button = Instance.new("TextButton")
+    button.Text = "> " .. text
+    button.Size = UDim2.new(1, -10, 0, 45)
+    button.Position = UDim2.new(0, 5, 0, #parent:GetChildren() * 50)
+    button.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    button.BackgroundTransparency = 0.7
+    button.TextColor3 = Color3.fromRGB(0, 255, 0)
+    button.Font = Enum.Font.Code
+    button.TextSize = 14
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.Parent = parent
+    
+    button.MouseEnter:Connect(function()
+        button.TextColor3 = Color3.fromRGB(0, 255, 255)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        button.TextColor3 = Color3.fromRGB(0, 255, 0)
+    end)
+    
+    button.MouseButton1Click:Connect(callback)
+    
+    parent.CanvasSize = UDim2.new(0, 0, 0, #parent:GetChildren() * 50)
+    
+    return button
+end
+
+local function addInput(parent, text, placeholder, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -10, 0, 45)
+    frame.Position = UDim2.new(0, 5, 0, #parent:GetChildren() * 50)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Text = "> " .. text
+    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.TextColor3 = Color3.fromRGB(0, 255, 0)
+    label.Font = Enum.Font.Code
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+    
+    local textBox = Instance.new("TextBox")
+    textBox.PlaceholderText = placeholder
+    textBox.Size = UDim2.new(0.6, 0, 1, -5)
+    textBox.Position = UDim2.new(0.4, 0, 0, 2.5)
+    textBox.BackgroundColor3 = Color3.fromRGB(0, 20, 0)
+    textBox.BackgroundTransparency = 0.5
+    textBox.TextColor3 = Color3.fromRGB(0, 255, 0)
+    textBox.Font = Enum.Font.Code
+    textBox.TextSize = 14
+    textBox.Parent = frame
+    
+    textBox.FocusLost:Connect(function()
+        callback(textBox.Text)
+    end)
+    
+    parent.CanvasSize = UDim2.new(0, 0, 0, #parent:GetChildren() * 50)
+    
+    return textBox
+end
+
+local function addToggle(parent, text, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -10, 0, 45)
+    frame.Position = UDim2.new(0, 5, 0, #parent:GetChildren() * 50)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Text = "> " .. text
+    label.Size = UDim2.new(0.8, 0, 1, 0)
+    label.TextColor3 = Color3.fromRGB(0, 255, 0)
+    label.Font = Enum.Font.Code
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+    
+    local toggle = Instance.new("TextButton")
+    toggle.Text = "[OFF]"
+    toggle.Size = UDim2.new(0.2, 0, 1, -5)
+    toggle.Position = UDim2.new(0.8, 0, 0, 2.5)
+    toggle.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    toggle.TextColor3 = Color3.fromRGB(255, 0, 0)
+    toggle.Font = Enum.Font.Code
+    toggle.TextSize = 14
+    toggle.Parent = frame
+    
+    local state = false
+    toggle.MouseButton1Click:Connect(function()
+        state = not state
+        callback(state)
+        if state then
+            toggle.Text = "[ON]"
+            toggle.TextColor3 = Color3.fromRGB(0, 255, 0)
+        else
+            toggle.Text = "[OFF]"
+            toggle.TextColor3 = Color3.fromRGB(255, 0, 0)
+        end
+    end)
+    
+    parent.CanvasSize = UDim2.new(0, 0, 0, #parent:GetChildren() * 50)
+    
+    return toggle
+end
+
+-- Main Tab
+local msgInput = addInput(contentFrames[1], "Server Message:", "TEAM SSOH JOIN NOW", function() end)
+local musicInput = addInput(contentFrames[1], "Music ID:", "1843302063", function() end)
+
+addButton(contentFrames[1], "Create Baseplate", createBaseplate)
+addButton(contentFrames[1], "Name all N3xx the goat", nameAll)
+addButton(contentFrames[1], "Heal Me", healMe)
+
+addButton(contentFrames[1], "Send Message", function()
+    serverMessage(msgInput.Text)
+end)
+
+addButton(contentFrames[1], "Play Custom Music", function()
+    playMusic(musicInput.Text, true)
+end)
+
+addButton(contentFrames[1], "Stop Music", function()
+    playMusic("", false)
+end)
+
+addToggle(contentFrames[1], "Disco Mode", discoMode)
+
+-- Visuals Tab
+local skyInput = addInput(contentFrames[2], "Skybox ID:", "136245921878961", function() end)
+
+addButton(contentFrames[2], "Apply Skybox", function()
+    setSkybox(skyInput.Text)
+end)
+
+addButton(contentFrames[2], "Set Player Skybox", function()
+    setSkybox(tostring(localPlayer.UserId))
+end)
+
+addToggle(contentFrames[2], "Rainbow Fog", rainbowFog)
+addToggle(contentFrames[2], "Player ESP", toggleESP)
+
+-- Admin Tab
+addButton(contentFrames[3], "Fling All Players (1000x)", function()
+    coroutine.wrap(flingAll)()
+end)
+
+addButton(contentFrames[3], "Decal Spam", decalSpam)
+addButton(contentFrames[3], "Chicken Dance", chickenDance)
+addButton(contentFrames[3], "Fire All", fireAll)
+addButton(contentFrames[3], "JUMPSCARE ALL", jumpscareAll)
+addButton(contentFrames[3], "Teleport All to Me", teleportAllPlayersToMe)
+addButton(contentFrames[3], "KICK ALL PLAYERS", kickAllPlayers)
+
+-- Player Tab
+local teleportInput = addInput(contentFrames[4], "Teleport to Player:", "Username", function() end)
+addButton(contentFrames[4], "Teleport", function()
+    local success = teleportToPlayer(teleportInput.Text)
+    if not success then
+        serverMessage("Player not found!")
+    end
+end)
+
+local teleportToMeInput = addInput(contentFrames[4], "Teleport Player to Me:", "Username", function() end)
+addButton(contentFrames[4], "Teleport to Me", function()
+    local success = teleportPlayerToMe(teleportToMeInput.Text)
+    if not success then
+        serverMessage("Player not found!")
+    end
+end)
+
+local flySpeedInput = addInput(contentFrames[4], "Fly Speed:", "50", function(text)
+    local num = tonumber(text)
+    if num then
+        flySpeed = num
+    end
+end)
+
+local walkSpeedInput = addInput(contentFrames[4], "Walk Speed:", "16", function(text)
+    local num = tonumber(text)
+    if num then
+        walkSpeed = num
+        setSpeed()
+    end
+end)
+
+local jumpPowerInput = addInput(contentFrames[4], "Jump Power:", "50", function(text)
+    local num = tonumber(text)
+    if num then
+        jumpPower = num
+        setSpeed()
+    end
+end)
+
+local speedMultInput = addInput(contentFrames[4], "Speed Multiplier:", "1", function(text)
+    local num = tonumber(text)
+    if num then
+        speedMultiplier = num
+        setSpeed()
+    end
+end)
+
+addButton(contentFrames[4], "Apply Speed Settings", setSpeed)
+
+addToggle(contentFrames[4], "Fly Mode", toggleFly)
+addToggle(contentFrames[4], "Noclip", toggleNoclip)
+
+addButton(contentFrames[4], "Activate Fling (1000x)", function()
+    activateFling()
+    serverMessage("Fling activated!")
+end)
+
+addButton(contentFrames[4], "Deactivate Fling", function()
+    deactivateFling()
+    serverMessage("Fling deactivated!")
+end)
+
+-- Server Tab
+local teamNameInput = addInput(contentFrames[5], "Team Name:", "Team", function() end)
+local teamCountInput = addInput(contentFrames[5], "Team Count:", "2", function() end)
+
+addButton(contentFrames[5], "Create Teams", function()
+    local name = teamNameInput.Text
+    local count = tonumber(teamCountInput.Text)
+    
+    if not name or name == "" then
+        serverMessage("Invalid team name!")
+        return
+    end
+    
+    if not count or count < 1 then
+        serverMessage("Invalid team count!")
+        return
+    end
+    
+    createTeams(name, count)
+end)
+
+addButton(contentFrames[5], "Convert to R6", function()
+    if localPlayer.Character then
+        localPlayer.Character:BreakJoints()
+    end
+    localPlayer.CharacterAppearance = "http://www.roblox.com/asset/?id=180319847"
+    localPlayer:LoadCharacter()
+end)
+
+addButton(contentFrames[5], "Server Hop", function()
+    local success, result = pcall(function()
+        http:SetHttpEnabled(true)
+        local serverList = game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=2&limit=100")
+        local decoded = http:JSONDecode(serverList)
+        
+        if decoded and decoded.data and #decoded.data > 0 then
+            local randomServer = decoded.data[math.random(1, #decoded.data)]
+            teleport:TeleportToPlaceInstance(game.PlaceId, randomServer.id)
+        end
+    end)
+    
+    if not success then
+        warn("Server hop failed: " .. result)
+    end
+end)
+
+addButton(contentFrames[5], "Rejoin Server", function()
+    teleport:Teleport(game.PlaceId)
+end)
+
+-- Trolls Tab (Новая вкладка)
+local trollsContent = contentFrames[6]
+
+addToggle(trollsContent, "Big Head Mode", bigHeadMode)
+addButton(trollsContent, "Upside Down All", upsideDownAll)
+addButton(trollsContent, "Ragdoll All", ragdollAll)
+addToggle(trollsContent, "Swim in Air", swimInAir)
+addToggle(trollsContent, "Confetti Explosion", function(state)
+    confettiEnabled = state
+    serverMessage(state and "CONFETTI ON!" or "CONFETTI OFF!")
+end)
+addButton(trollsContent, "Spin Players", spinPlayers)
+addButton(trollsContent, "Invisible Players", invisiblePlayers)
+addButton(trollsContent, "Giant Players", giantPlayers)
+
+-- Кнопка закрытия
+local closeButton = Instance.new("TextButton")
+closeButton.Text = "[X]"
+closeButton.Size = UDim2.new(0, 40, 0, 40)
+closeButton.Position = UDim2.new(1, -40, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+closeButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+closeButton.Font = Enum.Font.Code
+closeButton.TextSize = 18
+closeButton.Parent = mainFrame
+
+closeButton.MouseEnter:Connect(function()
+    closeButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+closeButton.MouseLeave:Connect(function()
+    closeButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+    discoMode(false)
+    playMusic("", false)
+    rainbowFog(false)
+    toggleFly(false)
+    toggleESP(false)
+    toggleNoclip(false)
+    deactivateFling()
+    setSpeed()
+    bigHeadMode(false)
+    swimInAir(false)
+end)
+
+-- Перетаскивание окна
+local dragging = false
+local dragInput, dragStart, startPos
+
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+userInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = startPos + UDim2.new(0, delta.X, 0, delta.Y)
+    end
+end)
+
+-- Анимация открытия
+mainFrame.Size = UDim2.new(0, 0, 0, 0)
+tween:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+    Size = UDim2.new(0, 500, 0, 600)
+}):Play()
+
+-- Синхронизация состояний
+N3xxData.ChildAdded:Connect(syncStates)
+for _, child in ipairs(N3xxData:GetChildren()) do
+    child.Changed:Connect(syncStates)
+end
+
+-- Автоматически применяем эффекты при запуске
+task.wait(1.5)
+setSkybox("136245921878961")
+playMusic("1843302063", true)
+nameAll()
+setSpeed()
+
+-- Инициализация слушателя конфетти
+setupConfettiListener()
