@@ -790,6 +790,75 @@ local function fireAll()
     serverMessage("Set everyone on fire!")
 end
 
+-- НОВЫЕ ФУНКЦИИ ДЛЯ РАЗДЕЛА ADMIN
+-- Поджечь все части
+local function fireAllParts()
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if (part:IsA("BasePart") or part:IsA("MeshPart")) and 
+           not part:IsA("Terrain") and 
+           not part:FindFirstAncestorOfClass("Player") then
+            
+            local fire = Instance.new("Fire")
+            fire.Size = 15
+            fire.Heat = 35
+            fire.Color = Color3.new(1, 0, 0)
+            fire.SecondaryColor = Color3.new(1, 1, 0)
+            fire.Parent = part
+            game:GetService("Debris"):AddItem(fire, 15)
+        end
+    end
+    serverMessage("SET ALL PARTS ON FIRE!")
+end
+
+-- Преобразовать все части в меш-части
+local function meshAllParts()
+    local meshId = "942267321" -- ID сферического меша
+    
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") and 
+           not part:IsA("MeshPart") and 
+           not part:IsA("Terrain") and 
+           not part:FindFirstAncestorOfClass("Player") then
+            
+            pcall(function()
+                -- Сохраняем свойства
+                local size = part.Size
+                local position = part.Position
+                local rotation = part.Orientation
+                local color = part.Color
+                local material = part.Material
+                local transparency = part.Transparency
+                local anchored = part.Anchored
+                local canCollide = part.CanCollide
+                
+                -- Создаем меш-часть
+                local meshPart = Instance.new("MeshPart")
+                meshPart.Size = size
+                meshPart.Position = position
+                meshPart.Orientation = rotation
+                meshPart.Color = color
+                meshPart.Material = material
+                meshPart.Transparency = transparency
+                meshPart.Anchored = anchored
+                meshPart.CanCollide = canCollide
+                meshPart.Name = "N3xxMeshPart"
+                
+                -- Применяем меш
+                local mesh = Instance.new("SpecialMesh")
+                mesh.MeshId = "rbxassetid://" .. meshId
+                mesh.TextureId = "rbxassetid://" .. meshId
+                mesh.Scale = Vector3.new(1, 1, 1)
+                mesh.Parent = meshPart
+                
+                -- Заменяем оригинальную часть
+                meshPart.Parent = part.Parent
+                part:Destroy()
+            end)
+        end
+    end
+    serverMessage("ALL PARTS MESHED!")
+end
+
 -- ================ НОВЫЕ ФУНКЦИИ ДЛЯ ВКЛАДКИ TROLLS ================ --
 
 -- Функция переворота всех игроков вверх ногами
@@ -1364,7 +1433,9 @@ end)
 
 addButton(contentFrames[3], "Decal Spam", decalSpam)
 addButton(contentFrames[3], "Chicken Dance", chickenDance)
-addButton(contentFrames[3], "Fire All", fireAll)
+addButton(contentFrames[3], "Fire All Players", fireAll)
+addButton(contentFrames[3], "Fire All Parts", fireAllParts)
+addButton(contentFrames[3], "Mesh All Parts", meshAllParts)
 addButton(contentFrames[3], "JUMPSCARE ALL", jumpscareAll)
 addButton(contentFrames[3], "Teleport All to Me", teleportAllPlayersToMe)
 addButton(contentFrames[3], "KICK ALL PLAYERS", kickAllPlayers)
@@ -1482,7 +1553,7 @@ addButton(contentFrames[5], "Rejoin Server", function()
     teleport:Teleport(game.PlaceId)
 end)
 
--- Trolls Tab (Новая вкладка)
+-- Trolls Tab
 local trollsContent = contentFrames[6]
 
 addToggle(trollsContent, "Big Head Mode", bigHeadMode)
